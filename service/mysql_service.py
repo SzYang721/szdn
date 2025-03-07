@@ -5,14 +5,17 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 # 获取项目根目录
 parent_dir = os.path.dirname(current_dir)
 # 将项目根目录添加到Python路径
-# sys.path.append(parent_dir)
+sys.path.append(parent_dir)
 
+from sqlalchemy import create_engine
 import mysql.connector
 import pandas as pd
 from typing import List, Dict, Optional, Union
 import logging
 from datetime import datetime, timedelta
-from config.db_config import *
+from configs.db_config import *
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 class MySQLService:
     """MySQL数据库服务类，用于获取时间序列数据"""
@@ -33,6 +36,10 @@ class MySQLService:
             'password': password,
             'database': database
         }
+        # 创建 SQLAlchemy 引擎
+        self.engine = create_engine(
+            f'mysql+pymysql://{user}:{password}@{host}/{database}'
+        )
         self.connection = None
         self._connect()
         
@@ -67,6 +74,7 @@ class MySQLService:
         except Exception as e:
             logging.error(f"Error fetching real-time data: {e}")
             raise
+        
     def get_monthly_yearly_data(
         self,
         table: str,
@@ -130,7 +138,7 @@ class MySQLService:
                 query += " WHERE " + " AND ".join(conditions)
             
             # 执行查询
-            df = pd.read_sql(query, self.connection)
+            df = pd.read_sql(query, self.engine)
             return df
             
         except mysql.connector.Error as err:
@@ -139,6 +147,7 @@ class MySQLService:
         except Exception as e:
             logging.error(f"获取月度/年度数据时出错: {e}")
             raise
+        
     def get_time_series_data(
         self,
         table: str,
@@ -197,7 +206,7 @@ class MySQLService:
             query += f" ORDER BY {time_column}"
             
             # 执行查询
-            df = pd.read_sql(query, self.connection)
+            df = pd.read_sql(query, self.engine)
             
             # 确保时间列是datetime类型
             df[time_column] = pd.to_datetime(df[time_column])
@@ -272,7 +281,7 @@ class MySQLService:
             query += f" GROUP BY time_interval ORDER BY time_interval"
             
             # 执行查询
-            df = pd.read_sql(query, self.connection)
+            df = pd.read_sql(query, self.engine)
             
             # 确保时间列是datetime类型
             df['time_interval'] = pd.to_datetime(df['time_interval'])
@@ -293,8 +302,7 @@ class MySQLService:
 
 
 if __name__ == "__main__":
-    print(current_dir)
-    print(parent_dir)
+    print("系统目录：",sys.path)
     
     # 测试数据库连接
     print("数据库连接...")
